@@ -1,0 +1,30 @@
+name: Build super-simple-wayland-bar
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Nix
+        uses: cachix/install-nix-action@v27
+        with:
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+
+      - name: Build
+        run: nix build
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: super-simple-wayland-bar
+          path: result/bin/super-simple-wayland-bar
