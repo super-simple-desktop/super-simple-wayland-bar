@@ -92,6 +92,9 @@ fn setup_layer_shell(window: &ApplicationWindow) {
     window.set_height_request(32);
 }
 
+// Uniform padding for every block - same value used for all positions (left/right/center).
+const BLOCK_PADDING: &str = "2px 6px";
+
 fn create_block_box(
     icon_name: &str,
     right_text: &str,
@@ -99,28 +102,24 @@ fn create_block_box(
     right_bg_color: &str,
 ) -> (Image, Label, gtk4::Box) {
     let box_ = gtk4::Box::new(Orientation::Horizontal, 0);
-    // No expand: blocks hug content, packed tightly next to each other.
-    // Left/right clusters handle positioning, center is handled by CenterBox.
+    // Each block in a position is next to the previous one: spacing=0, no expand, no margin/border.
+    // Left/right clusters (gtk4::Box spacing 0) pack these tightly; center is handled by CenterBox.
     box_.set_hexpand(false);
     box_.set_vexpand(true);
-    // Ensure no spacing / border between elements: 0 outer margin/border/padding on container.
-    // Internal padding is kept minimal inside icon/label css (2px 6px) but inter-block gap is 0.
-    // Using CSS with margin:0; border:none; spacing is controlled by Box spacing=0.
 
     let image = Image::from_icon_name(icon_name);
     let label = Label::new(Some(right_text));
-
-    // Tight packing: no extra spacing, no border between image and label either.
-    // Keep label/image with minimal internal padding but zero margin/border.
+    // No border/separator between icon and label parts of the same block - spacing 0
     box_.append(&image);
     box_.append(&label);
 
-    // Apply per-element backgrounds with zero border/margin and system font inheritance.
-    // Using system font: do NOT set a custom font-family, use inherit so it follows GTK/system settings.
+    // Per-element backgrounds with uniform padding and system font (inherit).
+    // Keep padding identical for left/right/center via BLOCK_PADDING.
     let left_rgba = RGBA::parse(left_bg_color).unwrap_or_else(|_| RGBA::new(0.0, 0.0, 0.0, 1.0));
     let left_css = format!(
-        r#"* {{ background: rgba({:.2}, {:.2}, {:.2}, {:.2}); margin: 0; padding: 2px 6px; border: none; border-radius: 0; outline: none; font-family: inherit; }}"#,
-        left_rgba.red(), left_rgba.green(), left_rgba.blue(), left_rgba.alpha()
+        r#"* {{ background: rgba({:.2}, {:.2}, {:.2}, {:.2}); margin: 0; padding: {}; border: none; border-radius: 0; outline: none; font-family: inherit; }}"#,
+        left_rgba.red(), left_rgba.green(), left_rgba.blue(), left_rgba.alpha(),
+        BLOCK_PADDING
     );
     let css_provider = gtk4::CssProvider::new();
     css_provider.load_from_data(&left_css);
@@ -128,14 +127,15 @@ fn create_block_box(
 
     let right_rgba = RGBA::parse(right_bg_color).unwrap_or_else(|_| RGBA::new(0.0, 0.0, 0.0, 1.0));
     let right_css = format!(
-        r#"* {{ background: rgba({:.2}, {:.2}, {:.2}, {:.2}); margin: 0; padding: 2px 6px; border: none; border-radius: 0; outline: none; font-family: inherit; color: inherit; }}"#,
-        right_rgba.red(), right_rgba.green(), right_rgba.blue(), right_rgba.alpha()
+        r#"* {{ background: rgba({:.2}, {:.2}, {:.2}, {:.2}); margin: 0; padding: {}; border: none; border-radius: 0; outline: none; font-family: inherit; color: inherit; }}"#,
+        right_rgba.red(), right_rgba.green(), right_rgba.blue(), right_rgba.alpha(),
+        BLOCK_PADDING
     );
     let label_css_provider = gtk4::CssProvider::new();
     label_css_provider.load_from_data(&right_css);
     label.style_context().add_provider(&label_css_provider, gtk4::STYLE_PROVIDER_PRIORITY_USER);
 
-    // Also ensure container itself has no border/margin
+    // Container itself: no border/margin/padding between blocks
     let container_css = gtk4::CssProvider::new();
     container_css.load_from_data(" * { margin: 0; padding: 0; border: none; border-radius: 0; } ");
     box_.style_context().add_provider(&container_css, gtk4::STYLE_PROVIDER_PRIORITY_USER);
@@ -176,7 +176,7 @@ fn main() {
         setup_layer_shell(&window);
 
         // Global CSS: no borders between elements, spacing 0, system font (inherit).
-        // This resets margin/border/padding for the whole bar so elements sit flush next to each other.
+        // Padding is identical for every block (BLOCK_PADDING); inter-block gap is 0.
         // We intentionally do NOT set a hardcoded font-family; `inherit` keeps the system/GTK font.
         let global_css = gtk4::CssProvider::new();
         let rgba = RGBA::parse(&config.colors.background).unwrap();
@@ -201,16 +201,17 @@ fn main() {
             }}
             label {{
                 margin: 0;
-                padding: 2px 6px;
+                padding: {};
                 border: none;
                 font-family: inherit;
             }}
             image {{
                 margin: 0;
-                padding: 2px 6px;
+                padding: {};
                 border: none;
             }}
             "#,
+            BLOCK_PADDING, BLOCK_PADDING,
             rgba.red(), rgba.green(), rgba.blue(), rgba.alpha(),
             text_rgba.red(), text_rgba.green(), text_rgba.blue(), text_rgba.alpha()
         ));
@@ -220,7 +221,8 @@ fn main() {
         window.set_height_request(32);
 
         // === 3-position layout: left | center (absolutely centered) | right ===
-        // Use GtkCenterBox which guarantees the center widget is absolutely centered
+        // Only 2 positions hold blocks (left + right); center is reserved for clock.
+        // GtkCenterBox guarantees the center widget is absolutely centered on the screen
         // regardless of left/right width. Left/right clusters pack tightly with spacing 0.
         let center_box = CenterBox::new();
         center_box.set_orientation(Orientation::Horizontal);
